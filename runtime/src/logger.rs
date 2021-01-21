@@ -1,3 +1,4 @@
+use bincode::{deserialize_from, serialize_into};
 use std::{collections::HashMap, env, fs, io, path::Path};
 
 use crate::{len_label, tag_set_wrap};
@@ -82,24 +83,8 @@ impl Logger {
 
     fn fini(&self) {
         if let Some(fd) = &self.fd {
-            use std::collections::HashSet;
-            use std::io::Write;
-            let input_subsets = self.data
-                .tags
-                .values()
-                .map(|v| {
-                    v.iter()
-                        .flat_map(|tag| (tag.begin..tag.end))
-                        .collect::<Vec<u32>>()
-                })
-                .collect::<HashSet<Vec<u32>>>();
             let mut writer = io::BufWriter::new(fd);
-            for input in input_subsets {
-                for offset in input {
-                    write!(&mut writer, "{},", offset);
-                }
-                writeln!(&mut writer);
-            }
+            serialize_into(&mut writer, &self.data).expect("Could not serialize data.");
         }
     }
 }
@@ -116,7 +101,7 @@ pub fn get_log_data(path: &Path) -> io::Result<LogData> {
         return Err(io::Error::new(io::ErrorKind::Other, "Could not find any interesting constraint!, Please make sure taint tracking works or running program correctly."));
     }
     let mut reader = io::BufReader::new(f);
-    match serde_json::from_reader::<&mut io::BufReader<fs::File>, LogData>(&mut reader) {
+    match deserialize_from::<&mut io::BufReader<fs::File>, LogData>(&mut reader) {
         Ok(v) => Ok(v),
         Err(_) => Err(io::Error::new(io::ErrorKind::Other, "bincode parse error!")),
     }
